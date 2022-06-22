@@ -2,11 +2,12 @@
 
 namespace App\Http\Controllers;
 
+use App\Models\Image;
 use App\Models\Product;
-use App\Models\ProductVariant;
-use App\Models\ProductVariantPrice;
+use App\Models\ProductImage;
 use App\Models\Variant;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\DB;
 
 class ProductController extends Controller
 {
@@ -17,7 +18,46 @@ class ProductController extends Controller
      */
     public function index()
     {
-        return view('products.index');
+        $products = Product::with(['productVarientPrice', 'productVarients']);
+        if (request()->has('title') && request()->get('title') != null) {
+            $title = request()->get('title');
+            $products->where('title', 'LIKE', "%" . $title . "%");
+        }
+        if (request()->has('variant') && request()->get('variant') != null) {
+            $variant = request()->get('variant');
+            $products->whereHas('productVarients', function ($query) use ($variant) {
+                $query->where(function ($q) use ($variant) {
+                    $q->where('variant', $variant);
+                });
+            });
+        }
+        if (request()->has('price_from') && request()->get('price_from') != null) {
+            $fromPrice = request()->get('price_from');
+            $products->whereHas('productVarientPrice', function ($query) use ($fromPrice) {
+                $query->where(function ($q) use ($fromPrice) {
+                    $q->where('price', ">=", $fromPrice);
+                });
+            });
+        }
+        if (request()->has('price_to') && request()->get('price_to') != null) {
+            $toPrice = request()->get('price_to');
+            $products->whereHas('productVarientPrice', function ($query) use ($toPrice) {
+                $query->where(function ($q) use ($toPrice) {
+                    $q->where('price', "<=", $toPrice);
+                });
+            });
+        }
+        if (request()->has('date') && request()->get('date') != null) {
+            $fDate = date(request()->get('date'));
+            $products->whereDate('created_at', $fDate);
+        }
+
+        $products = $products->paginate(200);
+        $variants = Variant::all();
+        return view('products.index', [
+            'products' => $products,
+            'variants' => $variants,
+        ]);
     }
 
     /**
@@ -39,7 +79,30 @@ class ProductController extends Controller
      */
     public function store(Request $request)
     {
+        $result = DB::transaction(function () use ($request) {
+//            Step One:: Add product
+            $product = Product::create([
+                'title' => $request->title,
+                'sku' => $request->sku,
+                'description' => $request->description,
+            ]);
 
+            //Step Two:: Add Product Image
+            if (isset(request()->product_image)) {
+                if (isset(request()->product_image)) {
+                    $imageName = time() . '.' . request()->product_image->getClientOriginalExtension();
+                    request()->product_image->move(public_path('images/products'), $imageName);
+                    ProductImage::create([
+                        'file_path' => public_path('images/products/' . $imageName),
+                        'thumbnail' => true,
+                        'product_id' => $product->id,
+                    ]);
+                }
+            }
+
+            //Step Three:: Create Product Variant
+        });
+        return $result;
     }
 
 

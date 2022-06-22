@@ -10,4 +10,19 @@ class Product extends Model
         'title', 'sku', 'description'
     ];
 
+    public function createdAt()
+    {
+//        return $this->created_at->format('d-M-Y');
+        return $this->created_at->diffForHumans();;
+    }
+
+    public function productVarients()
+    {
+        return $this->hasMany(ProductVariant::class);
+    }
+
+    public function productVarientPrice()
+    {
+        return $this->hasMany(ProductVariantPrice::class);
+    }
 }
