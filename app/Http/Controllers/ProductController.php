@@ -5,6 +5,7 @@ namespace App\Http\Controllers;
 use App\Models\Image;
 use App\Models\Product;
 use App\Models\ProductImage;
+use App\Models\ProductVariant;
 use App\Models\Variant;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
@@ -98,6 +99,18 @@ class ProductController extends Controller
                         'product_id' => $product->id,
                     ]);
                 }
+            }
+            $productVariantPrices = request()->product_variant_prices;
+            $productVariants = request()->product_variant;
+            foreach ($productVariants as $productVariant) {
+                foreach ($productVariant->tags as $tag) {
+                    $pVariant = ProductVariant::create([
+                        'variant_id' => $productVariant->option,
+                        'product_id' => $product->id,
+                        'variant' => $tag,
+                    ]);
+                }
+
             }
 
             //Step Three:: Create Product Variant
