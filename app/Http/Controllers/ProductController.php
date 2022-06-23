@@ -6,9 +6,11 @@ use App\Models\Image;
 use App\Models\Product;
 use App\Models\ProductImage;
 use App\Models\ProductVariant;
+use App\Models\ProductVariantPrice;
 use App\Models\Variant;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Log;
 
 class ProductController extends Controller
 {
@@ -80,6 +82,7 @@ class ProductController extends Controller
      */
     public function store(Request $request)
     {
+
         $result = DB::transaction(function () use ($request) {
 //            Step One:: Add product
             $product = Product::create([
@@ -89,10 +92,10 @@ class ProductController extends Controller
             ]);
 
             //Step Two:: Add Product Image
-            if (isset(request()->product_image)) {
-                if (isset(request()->product_image)) {
-                    $imageName = time() . '.' . request()->product_image->getClientOriginalExtension();
-                    request()->product_image->move(public_path('images/products'), $imageName);
+            if (request()->hasfile('product_image')) {
+                foreach ($request->file('product_image') as $image) {
+                    $imageName = "image_" . rand(0, 100) . time() . '.' . $image->getClientOriginalExtension();
+                    $image->move(public_path('images/products'), $imageName);
                     ProductImage::create([
                         'file_path' => public_path('images/products/' . $imageName),
                         'thumbnail' => true,
@@ -102,22 +105,114 @@ class ProductController extends Controller
             }
             $productVariantPrices = request()->product_variant_prices;
             $productVariants = request()->product_variant;
-            foreach ($productVariants as $productVariant) {
-                foreach ($productVariant->tags as $tag) {
-                    $pVariant = ProductVariant::create([
-                        'variant_id' => $productVariant->option,
+            $variantOne = null;
+            $variantTwo = null;
+            $variantThree = null;
+            foreach ($productVariants as $k => $productVariant) {
+                //first variant like color
+                if ($k == 0) $variantOne = $productVariant;
+                if ($k == 1) $variantTwo = $productVariant;
+                if ($k == 2) $variantThree = $productVariant;
+            }
+
+            if ($variantOne != null) {
+
+                $variantOneId = $variantOne['option'];
+                foreach ($variantOne['tags'] as $tag) {
+                    $pVariantOne = ProductVariant::create([
+                        'variant_id' => $variantOneId,
                         'product_id' => $product->id,
                         'variant' => $tag,
                     ]);
+
+
+                    if ($variantTwo != null) {
+                        $variantTwoId = $variantTwo['option'];
+                        foreach ($variantTwo['tags'] as $tag) {
+                            $pVariantTwo = ProductVariant::create([
+                                'variant_id' => $variantTwoId,
+                                'product_id' => $product->id,
+                                'variant' => $tag,
+                            ]);
+
+                            if (count($productVariants) == 2) {
+                                $productVariantPriceTwo = new ProductVariantPrice;
+                                $productVariantPriceTwo->product_variant_one = $pVariantOne->id;
+                                $productVariantPriceTwo->product_variant_two = $pVariantTwo->id;
+                                $productVariantPriceTwo->product_id = $product->id;
+                                $v = $this->findPrice($productVariantPrices,
+                                    $this->generateTitle($pVariantOne->variant, $pVariantTwo->variant, null));
+                                $productVariantPriceTwo->price = $v['price'];
+                                $productVariantPriceTwo->stock = $v['stock'];
+                                $productVariantPriceTwo->save();
+                            }
+
+                            if ($variantThree != null) {
+                                $variantThreeId = $variantThree['option'];
+                                foreach ($variantThree['tags'] as $tag) {
+                                    $pVariantThree = ProductVariant::create([
+                                        'variant_id' => $variantThreeId,
+                                        'product_id' => $product->id,
+                                        'variant' => $tag,
+                                    ]);
+                                    if (count($productVariants) == 3) {
+                                        $productVariantPriceThree = new ProductVariantPrice;
+                                        $productVariantPriceThree->product_variant_one = $pVariantOne->id;
+                                        $productVariantPriceThree->product_variant_two = $pVariantTwo->id;
+                                        $productVariantPriceThree->product_variant_three = $pVariantThree->id;
+                                        $productVariantPriceThree->product_id = $product->id;
+                                        $v = $this->findPrice($productVariantPrices,
+                                            $this->generateTitle($pVariantOne->variant, $pVariantTwo->variant, $pVariantThree->variant));
+                                        $productVariantPriceThree->price = $v['price'];
+                                        $productVariantPriceThree->stock = $v['stock'];
+                                        $productVariantPriceThree->save();
+                                    }
+                                }
+                            }
+                        }
+                    }
+
+                    if (count($productVariants) == 1) {
+                        $productVariantPriceOne = new ProductVariantPrice;
+                        $productVariantPriceOne->product_variant_one = $pVariantOne->id;
+                        $productVariantPriceOne->product_id = $product->id;
+                        $v = $this->findPrice($productVariantPrices,
+                            $this->generateTitle($pVariantOne->variant, null, null));
+                        $productVariantPriceOne->price = $v['price'];
+                        $productVariantPriceOne->stock = $v['stock'];
+                        $productVariantPriceOne->save();
+                    }
                 }
-
+            } else {
+                return false;
             }
-
-            //Step Three:: Create Product Variant
+            return true;
         });
         return $result;
     }
 
+    public function findPrice($productVariantPrices, $title)
+    {
+        foreach ($productVariantPrices as $v) {
+            if ($v['title'] == $title) return $v;
+        }
+        return null;
+    }
+
+    public function generateTitle($one = null, $two = null, $three = null)
+    {
+        $title = "";
+        if ($one != null) {
+            $title .= $one . "/";
+        }
+        if ($two != null) {
+            $title .= $two . "/";
+        }
+        if ($three != null) {
+            $title .= $three . "/";
+        }
+        return $title;
+    }
 
     /**
      * Display the specified resource.
@@ -125,7 +220,8 @@ class ProductController extends Controller
      * @param \App\Models\Product $product
      * @return \Illuminate\Http\Response
      */
-    public function show($product)
+    public
+    function show($product)
     {
 
     }
@@ -136,7 +232,8 @@ class ProductController extends Controller
      * @param \App\Models\Product $product
      * @return \Illuminate\Http\Response
      */
-    public function edit(Product $product)
+    public
+    function edit(Product $product)
     {
         $variants = Variant::all();
         return view('products.edit', compact('variants'));
@@ -149,7 +246,8 @@ class ProductController extends Controller
      * @param \App\Models\Product $product
      * @return \Illuminate\Http\Response
      */
-    public function update(Request $request, Product $product)
+    public
+    function update(Request $request, Product $product)
     {
         //
     }
@@ -160,7 +258,8 @@ class ProductController extends Controller
      * @param \App\Models\Product $product
      * @return \Illuminate\Http\Response
      */
-    public function destroy(Product $product)
+    public
+    function destroy(Product $product)
     {
         //
     }
