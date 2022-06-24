@@ -94,7 +94,7 @@
             </div>
         </div>
 
-        <button @click="saveProduct" type="submit" class="btn btn-lg btn-primary">Save</button>
+        <button @click="updateProduct" type="submit" class="btn btn-lg btn-primary">Update</button>
         <button type="button" class="btn btn-secondary btn-lg">Cancel</button>
     </section>
 </template>
@@ -112,6 +112,15 @@ export default {
     props: {
         variants: {
             type: Array,
+            required: true
+        },
+        product: {
+            required: true
+        },
+        product_prices: {
+            required: true
+        },
+        product_variants: {
             required: true
         }
     },
@@ -135,6 +144,20 @@ export default {
                 headers: {"My-Awesome-Header": "header value"}
             }
         }
+    },
+    created() {
+        this.product_name = this.product.title;
+        this.product_sku = this.product.sku;
+        this.description = this.product.description;
+        this.product_variant_prices = this.product_prices;
+        this.product_variant = this.product_variants;
+        product_variants.forEach((item) => {
+            this.product_variant.push({
+                option: item.option,
+                tags: item.tags
+            })
+        });
+        console.log(this.product_prices)
     },
     methods: {
         // it will push a new object into product variant
@@ -181,7 +204,7 @@ export default {
         },
 
         // store product into database
-        saveProduct() {
+        updateProduct() {
             let product = {
                 title: this.product_name,
                 sku: this.product_sku,
@@ -194,9 +217,9 @@ export default {
 
             axios.post('/product', product).then(response => {
                 if (response.data) {
-                   // alert("Data insert successfully.");
+                    alert("Data insert successfully.");
                 } else {
-                    //alert("something went wrong. please contact support.");
+                    alert("something went wrong. please contact support.");
                 }
                 console.log(response.data);
             }).catch(error => {

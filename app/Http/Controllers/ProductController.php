@@ -55,7 +55,7 @@ class ProductController extends Controller
             $products->whereDate('created_at', $fDate);
         }
 
-        $products = $products->paginate(200);
+        $products = $products->paginate(2);
         $variants = Variant::all();
         return view('products.index', [
             'products' => $products,
@@ -124,7 +124,6 @@ class ProductController extends Controller
                         'product_id' => $product->id,
                         'variant' => $tag,
                     ]);
-
 
                     if ($variantTwo != null) {
                         $variantTwoId = $variantTwo['option'];
@@ -232,11 +231,51 @@ class ProductController extends Controller
      * @param \App\Models\Product $product
      * @return \Illuminate\Http\Response
      */
-    public
-    function edit(Product $product)
+    public function edit(Product $product)
     {
         $variants = Variant::all();
-        return view('products.edit', compact('variants'));
+        $product_prices = $this->productPrices($product->id);
+        $product = Product::with(['productVarients', 'productVarientPrice', 'images'])->where('id', $product->id)->first();
+        $productVariants = $this->productVariants($product->id);
+        return view('products.edit', compact(
+            'variants', 'product', 'product_prices','productVariants'
+        ));
+    }
+
+    public function productVariants($id)
+    {
+        $productVariants = ProductVariant::where('product_id', $id)->get()->groupBy('variant_id');
+
+        $result = array();
+        foreach ($productVariants as $k => $pvs) {
+            $tmp = array();
+            $tmp['option'] = $k;
+            $tags = array();
+            foreach ($pvs as $pv) {
+                array_push($tags, $pv->variant);
+            }
+            $tmp['tags'] = $tags;
+            array_push($result, $tmp);
+        }
+        return json_encode($result);
+    }
+
+    public function productPrices($id)
+    {
+        $result = array();
+        $findProductPrices = ProductVariantPrice::with(['productVariantOne', 'productVariantTwo',
+            'productVariantThree'])->where('product_id', $id)->get();
+        foreach ($findProductPrices as $pp) {
+
+            $title = $this->generateTitle(
+                $pp->productVariantOne != null ? $pp->productVariantOne->variant : null
+                , $pp->productVariantTwo != null ? $pp->productVariantTwo->variant : null
+                , $pp->productVariantThree != null ? $pp->productVariantThree->variant : null
+            );
+            $tmp = array('title' => $title, 'price' => ($pp->price) . "", 'stock' => ($pp->stock) . "");
+            array_push($result, $tmp);
+        }
+        return json_encode($result);
     }
 
     /**
